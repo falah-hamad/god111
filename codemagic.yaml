@@ -3,6 +3,8 @@ workflows:
     name: Build Android APK
     max_build_duration: 60
 
+    instance_type: linux_x2
+
     environment:
       java: 21
       node: 22
@@ -35,7 +37,7 @@ workflows:
           ZIP_FILE=$(cat /tmp/project_zip)
 
           rm -rf project
-          mkdir project
+          mkdir -p project
 
           echo "Extracting god111.zip..."
 
@@ -43,6 +45,7 @@ workflows:
 
           echo "ZIP extracted successfully."
 
+          echo "Extracted files:"
           find project -maxdepth 3 -type f
 
 
@@ -62,10 +65,34 @@ workflows:
             exit 1
           fi
 
-          echo "Project folder:"
+          echo "React project found:"
           echo "$PROJECT_DIR"
 
           echo "$PROJECT_DIR" > /tmp/project_dir
+
+
+      - name: Check Node and NPM
+        script: |
+          echo "Node:"
+          node --version
+
+          echo "NPM:"
+          npm --version
+
+
+      - name: Inspect esbuild
+        script: |
+          PROJECT_DIR=$(cat /tmp/project_dir)
+
+          cd "$PROJECT_DIR"
+
+          echo "Checking esbuild packages..."
+
+          npm ls esbuild @esbuild/android-arm64 --all || true
+
+          echo "Checking package.json..."
+
+          grep -n "esbuild\|@esbuild" package.json || true
 
 
       - name: Install dependencies
@@ -74,7 +101,9 @@ workflows:
 
           cd "$PROJECT_DIR"
 
-          npm ci
+          echo "Installing dependencies..."
+
+          npm ci --include=optional
 
 
       - name: Build React
@@ -82,6 +111,8 @@ workflows:
           PROJECT_DIR=$(cat /tmp/project_dir)
 
           cd "$PROJECT_DIR"
+
+          echo "Building React/Vite..."
 
           npm run build
 
@@ -92,6 +123,8 @@ workflows:
 
           cd "$PROJECT_DIR"
 
+          echo "Syncing Capacitor Android..."
+
           npx cap sync android
 
 
@@ -101,12 +134,15 @@ workflows:
 
           if [ ! -d "$PROJECT_DIR/android" ]; then
             echo "ERROR: Android folder was not found."
+            find "$PROJECT_DIR" -maxdepth 3 -type d
             exit 1
           fi
 
           cd "$PROJECT_DIR/android"
 
           chmod +x gradlew
+
+          echo "Building Android APK..."
 
           ./gradlew assembleDebug
 
