@@ -1,0 +1,115 @@
+workflows:
+  android-apk:
+    name: Build Android APK
+    max_build_duration: 60
+
+    environment:
+      java: 21
+      node: 22
+
+    scripts:
+
+      - name: Find ZIP file
+        script: |
+          echo "Current directory:"
+          pwd
+
+          echo "Repository files:"
+          find . -maxdepth 3 -type f
+
+          ZIP_FILE="./god111.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: god111.zip was not found."
+            exit 1
+          fi
+
+          echo "Found ZIP:"
+          echo "$ZIP_FILE"
+
+          echo "$ZIP_FILE" > /tmp/project_zip
+
+
+      - name: Extract ZIP
+        script: |
+          ZIP_FILE=$(cat /tmp/project_zip)
+
+          rm -rf project
+          mkdir project
+
+          echo "Extracting god111.zip..."
+
+          unzip -q "$ZIP_FILE" -d project
+
+          echo "ZIP extracted successfully."
+
+          find project -maxdepth 3 -type f
+
+
+      - name: Locate React project
+        script: |
+          PROJECT_DIR=""
+
+          while IFS= read -r file; do
+            PROJECT_DIR=$(dirname "$file")
+            break
+          done < <(find project -name package.json -type f)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: package.json was not found inside god111.zip."
+            echo "ZIP contents:"
+            find project -maxdepth 5 -type f
+            exit 1
+          fi
+
+          echo "Project folder:"
+          echo "$PROJECT_DIR"
+
+          echo "$PROJECT_DIR" > /tmp/project_dir
+
+
+      - name: Install dependencies
+        script: |
+          PROJECT_DIR=$(cat /tmp/project_dir)
+
+          cd "$PROJECT_DIR"
+
+          npm ci
+
+
+      - name: Build React
+        script: |
+          PROJECT_DIR=$(cat /tmp/project_dir)
+
+          cd "$PROJECT_DIR"
+
+          npm run build
+
+
+      - name: Sync Capacitor
+        script: |
+          PROJECT_DIR=$(cat /tmp/project_dir)
+
+          cd "$PROJECT_DIR"
+
+          npx cap sync android
+
+
+      - name: Build Android APK
+        script: |
+          PROJECT_DIR=$(cat /tmp/project_dir)
+
+          if [ ! -d "$PROJECT_DIR/android" ]; then
+            echo "ERROR: Android folder was not found."
+            exit 1
+          fi
+
+          cd "$PROJECT_DIR/android"
+
+          chmod +x gradlew
+
+          ./gradlew assembleDebug
+
+
+    artifacts:
+      - project/**/android/app/build/outputs/apk/debug/app-debug.apk
