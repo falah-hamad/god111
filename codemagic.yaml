@@ -1,0 +1,39 @@
+workflows:
+  android-apk:
+    name: Build Android APK
+    max_build_duration: 60
+
+    environment:
+      java: 21
+      node: 22
+
+    scripts:
+      - name: Extract project
+        script: |
+          rm -rf project
+          mkdir project
+          unzip -q allah111.zip -d project
+
+      - name: Install dependencies
+        script: |
+          cd project
+          npm ci
+
+      - name: Build React
+        script: |
+          cd project
+          npm run build
+
+      - name: Sync Capacitor
+        script: |
+          cd project
+          npx cap sync android
+
+      - name: Build APK
+        script: |
+          cd project/android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+    artifacts:
+      - project/android/app/build/outputs/apk/debug/app-debug.apk
